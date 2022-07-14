@@ -6,22 +6,29 @@ from werkzeug.exceptions import abort
 
 # counts the total number of connections for the /metrics endpoint
 totalConnectionCount = 0
+healthy = True
 
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
     global totalConnectionCount
-    totalConnectionCount += 1
+    global healthy
     connection = sqlite3.connect('database.db')
     connection.row_factory = sqlite3.Row
+    totalConnectionCount += 1
+    healthy = True
     return connection
 
 # Function to get a post using its ID
 def get_post(post_id):
-    connection = get_db_connection()
-    post = connection.execute('SELECT * FROM posts WHERE id = ?',
-                        (post_id,)).fetchone()
-    connection.close()
+    try:
+        connection = get_db_connection()
+        post = connection.execute('SELECT * FROM posts WHERE id = ?',
+                            (post_id,)).fetchone()
+        connection.close()
+    except: 
+        global healthy
+        healthy = False
     return post
 
 # Define the Flask application
@@ -31,9 +38,13 @@ app.config['SECRET_KEY'] = 'your secret key'
 # Define the main route of the web application 
 @app.route('/')
 def index():
-    connection = get_db_connection()
-    posts = connection.execute('SELECT * FROM posts').fetchall()
-    connection.close()
+    try: 
+        connection = get_db_connection()
+        posts = connection.execute('SELECT * FROM posts').fetchall()
+        connection.close()
+    except: 
+        global healthy
+        healthy = False
     return render_template('index.html', posts=posts)
 
 # Define how each individual article is rendered 
@@ -64,13 +75,16 @@ def create():
         if not title:
             flash('Title is required!')
         else:
-            app.logger.info('Created new article with title "%s"' % title)
-            connection = get_db_connection()
-            connection.execute('INSERT INTO posts (title, content) VALUES (?, ?)',
-                         (title, content))
-            connection.commit()
-            connection.close()
-
+            try: 
+                connection = get_db_connection()
+                connection.execute('INSERT INTO posts (title, content) VALUES (?, ?)',
+                            (title, content))
+                connection.commit()
+                connection.close()
+                app.logger.info('Created new article with title "%s"' % title)
+            except: 
+                global healthy
+                healthy = False
             return redirect(url_for('index'))
 
     return render_template('create.html')
@@ -78,11 +92,19 @@ def create():
 # Define the healthcheck endpoint
 @app.route('/healthz')
 def status():
-    response = app.response_class(
-        response=json.dumps({"result": "OK - healthy"}),
-        status=200,
-        mimetype='application/json'
-    )
+    global healthy
+    if healthy: 
+        response = app.response_class(
+            response=json.dumps({"result": "OK - healthy"}),
+            status=200,
+            mimetype='application/json'
+        )
+    else:
+        response = app.response_class(
+            response=json.dumps({"result": "ERROR - unhealthy"}),
+            status=500,
+            mimetype='application/json'
+        )
     return response
 
 # Define the metrics endpoint
@@ -99,13 +121,17 @@ def metrics():
 
 # Get the count of posts in the database
 def getPostCount():
-    connection = get_db_connection()
-    count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()
-    connection.close()
+    try: 
+        connection = get_db_connection()
+        count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()
+        connection.close()
+    except: 
+        global healthy
+        healthy = False
     return count[0]
 
 # start the application on port 3111
 if __name__ == "__main__":
    FORMAT = '%(levelname)s: [%(asctime)s] %(message)s'
    logging.basicConfig(format=FORMAT, level=logging.DEBUG)
-   app.run(host='0.0.0.0', port='3111')
+   app.run(host='0.0.0.0', port='8888')
