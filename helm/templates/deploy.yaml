@@ -33,13 +33,13 @@ spec:
             memory: {{ .Values.resources.limits.memory }} 
         livenessProbe:
           httpGet:
-            path: {{ .Values.livenessProbe }} 
-            port: {{ .Values.containerPort }} 
+            path: {{ .Values.livenessProbe.path }} 
+            port: {{ .Values.livenessProbe.port }} 
           initialDelaySeconds: 3
           periodSeconds: 3
         readinessProbe:
           httpGet:
-            path: {{ .Values.readinessProbe }} 
-            port: {{ .Values.containerPort }} 
+            path: {{ .Values.readinessProbe.path }} 
+            port: {{ .Values.readinessProbe.port }} 
           initialDelaySeconds: 3
           periodSeconds: 3
